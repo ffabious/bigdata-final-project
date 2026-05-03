@@ -1,0 +1,6 @@
+user_segment,user_count,avg_sessions,avg_views,avg_carts,avg_purchases,avg_products_explored,avg_categories_explored,avg_active_days,conversion_rate
+High Value Customer,91165,29.8,154.6,19.5,13.0,66.9,17.2,54.7,8.40
+Regular Customer,953591,11.6,61.2,3.9,1.7,29.3,8.4,37.1,2.81
+Engaged Browser,763661,9.3,46.2,2.4,0.0,23.0,6.9,32.4,0.00
+Active Browser,1307708,7.4,34.6,0.0,0.0,21.0,6.6,34.5,0.00
+Passive Browser,4740512,1.7,3.0,0.0,0.0,2.2,1.5,6.4,0.00

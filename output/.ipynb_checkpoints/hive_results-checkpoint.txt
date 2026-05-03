@@ -1,0 +1,29 @@
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> -- Drop database if exists for clean reruns
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> DROP DATABASE IF EXISTS team18_projectdb CASCADE;
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> 
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> -- Create database with location
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> CREATE DATABASE team18_projectdb 
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> LOCATION 'project/hive/warehouse';
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> 
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> USE team18_projectdb;
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> 
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> -- Set optimization parameters
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> SET hive.execution.engine=tez;
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> SET hive.exec.dynamic.partition=true;
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> SET hive.exec.dynamic.partition.mode=nonstrict;
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> SET hive.optimize.sort.dynamic.partition=true;
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> 
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> -- Create external table for events (unpartitioned, from Sqoop import)
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> CREATE EXTERNAL TABLE events_raw 
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> STORED AS AVRO 
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> LOCATION 'project/warehouse/events' 
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> TBLPROPERTIES ('avro.schema.url'='project/warehouse/avsc/events.avsc');
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> 
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> -- Verify table creation
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> SELECT COUNT(*) as total_events FROM events_raw;
++---------------+--+
+| total_events  |
++---------------+--+
+| 177493585     |
++---------------+--+
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> SELECT * FROM events_raw LIMIT 10;

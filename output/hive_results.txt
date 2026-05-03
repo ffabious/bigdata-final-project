@@ -1,0 +1,487 @@
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> USE team18_projectdb;
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> 
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> -- Set optimization parameters
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> SET hive.execution.engine=tez;
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> SET hive.exec.dynamic.partition=true;
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> SET hive.exec.dynamic.partition.mode=nonstrict;
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> SET hive.optimize.sort.dynamic.partition=true;
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> SET hive.exec.max.dynamic.partitions=5000;
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> SET hive.exec.max.dynamic.partitions.pernode=500; 
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> 
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> -- Table 1: Events partitioned by year, month, day
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> -- This allows efficient time-based queries
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> DROP TABLE IF EXISTS events_partitioned;
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> 
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> CREATE EXTERNAL TABLE events_partitioned (
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     event_time TIMESTAMP,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     event_type STRING,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     product_id BIGINT,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     category_id BIGINT,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     category_code STRING,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     brand STRING,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     price DECIMAL(10,2),
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     user_id BIGINT,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     user_session STRING
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> )
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> PARTITIONED BY (year INT, month INT, day INT)
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> STORED AS PARQUET
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> LOCATION 'project/hive/warehouse/events_partitioned'
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> TBLPROPERTIES ('parquet.compression'='SNAPPY');
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> 
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> -- Insert data with dynamic partitioning
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> INSERT OVERWRITE TABLE events_partitioned
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> PARTITION (year, month, day)
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> SELECT 
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     FROM_UNIXTIME(CAST(event_time/1000 AS BIGINT)) as event_time,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     event_type,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     product_id,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     category_id,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     category_code,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     brand,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     price,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     user_id,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     user_session,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     YEAR(FROM_UNIXTIME(CAST(event_time/1000 AS BIGINT))) as year,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     MONTH(FROM_UNIXTIME(CAST(event_time/1000 AS BIGINT))) as month,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     DAY(FROM_UNIXTIME(CAST(event_time/1000 AS BIGINT))) as day
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> FROM events_raw
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> WHERE event_time IS NOT NULL;
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> 
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> -- Table 2: Session-level aggregated features 
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> -- Partitioned by date, bucketed by user_id for efficient joins
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> DROP TABLE IF EXISTS session_features;
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> 
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> CREATE EXTERNAL TABLE session_features (
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     user_session STRING,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     user_id BIGINT,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     session_start TIMESTAMP,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     session_end TIMESTAMP,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     event_count INT,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     views_count INT,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     carts_count INT,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     remove_count INT,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     purchase_count INT,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     distinct_products INT,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     distinct_categories INT,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     distinct_brands INT,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     avg_price DECIMAL(10,2),
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     max_price DECIMAL(10,2),
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     min_price DECIMAL(10,2),
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     total_session_duration_seconds BIGINT,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     avg_time_between_events_seconds DOUBLE,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     first_event_hour INT,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     first_event_day_of_week INT,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     has_purchase BOOLEAN
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> )
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> PARTITIONED BY (session_date STRING)
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> CLUSTERED BY (user_id) INTO 16 BUCKETS
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> STORED AS PARQUET
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> LOCATION 'project/hive/warehouse/session_features'
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> TBLPROPERTIES ('parquet.compression'='SNAPPY');
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> 
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> -- Insert aggregated session features
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> INSERT OVERWRITE TABLE session_features
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> PARTITION (session_date)
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> SELECT 
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     user_session,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     MAX(user_id) as user_id,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     MIN(event_time) as session_start,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     MAX(event_time) as session_end,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     COUNT(*) as event_count,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     SUM(CASE WHEN event_type = 'view' THEN 1 ELSE 0 END) as views_count,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     SUM(CASE WHEN event_type = 'cart' THEN 1 ELSE 0 END) as carts_count,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     SUM(CASE WHEN event_type = 'remove_from_cart' THEN 1 ELSE 0 END) as remove_count,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     SUM(CASE WHEN event_type = 'purchase' THEN 1 ELSE 0 END) as purchase_count,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     COUNT(DISTINCT product_id) as distinct_products,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     COUNT(DISTINCT category_id) as distinct_categories,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     COUNT(DISTINCT brand) as distinct_brands,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     AVG(price) as avg_price,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     MAX(price) as max_price,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     MIN(price) as min_price,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     UNIX_TIMESTAMP(MAX(event_time)) - UNIX_TIMESTAMP(MIN(event_time)) as total_session_duration_seconds,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     (UNIX_TIMESTAMP(MAX(event_time)) - UNIX_TIMESTAMP(MIN(event_time))) / NULLIF(COUNT(*) - 1, 0) as avg_time_between_events_seconds,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     HOUR(MIN(event_time)) as first_event_hour,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     DAYOFWEEK(MIN(event_time)) as first_event_day_of_week,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     MAX(CASE WHEN event_type = 'purchase' THEN TRUE ELSE FALSE END) as has_purchase,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     TO_DATE(MIN(event_time)) as session_date
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> FROM events_partitioned
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> GROUP BY user_session;
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> 
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> -- Table 3: Historical user features (30-day rolling window)
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> -- Partitioned by date for efficient time-based queries
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> DROP TABLE IF EXISTS user_historical_features;
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> 
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> CREATE EXTERNAL TABLE user_historical_features (
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     user_id BIGINT,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     purchase_count_30d INT,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     session_count_30d INT,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     avg_session_duration_30d DOUBLE,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     total_views_30d INT,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     total_carts_30d INT,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     cart_to_view_rate_30d DOUBLE,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     purchase_rate_30d DOUBLE,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     days_since_last_session INT,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     days_since_last_purchase INT,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     preferred_category_id BIGINT,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     preferred_brand STRING,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     avg_purchase_value_30d DECIMAL(10,2)
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> )
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> PARTITIONED BY (calculation_date STRING)
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> CLUSTERED BY (user_id) INTO 32 BUCKETS
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> STORED AS PARQUET
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> LOCATION 'project/hive/warehouse/user_historical_features'
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> TBLPROPERTIES ('parquet.compression'='SNAPPY');
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> 
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> -- Insert historical user features (example for a specific date)
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> WITH user_30d_stats AS (
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     SELECT 
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>         user_id,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>         COUNT(DISTINCT CASE WHEN has_purchase THEN user_session END) as sessions_with_purchase,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>         COUNT(DISTINCT user_session) as total_sessions,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>         SUM(views_count) as total_views,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>         SUM(carts_count) as total_carts,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>         AVG(total_session_duration_seconds) as avg_duration,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>         AVG(CASE WHEN has_purchase THEN avg_price END) as avg_purchase_value,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>         MAX(session_start) as last_session_time,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>         MAX(CASE WHEN has_purchase THEN session_start END) as last_purchase_time
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     FROM session_features
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     WHERE session_date >= DATE_SUB('2019-12-31', 30)
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     GROUP BY user_id
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> )
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> INSERT OVERWRITE TABLE user_historical_features
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> PARTITION (calculation_date = '2019-12-31')
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> SELECT 
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     user_id,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     sessions_with_purchase as purchase_count_30d,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     total_sessions as session_count_30d,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     avg_duration as avg_session_duration_30d,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     total_views as total_views_30d,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     total_carts as total_carts_30d,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     CASE WHEN total_views > 0 THEN total_carts * 1.0 / total_views ELSE 0 END as cart_to_view_rate_30d,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     CASE WHEN total_sessions > 0 THEN sessions_with_purchase * 1.0 / total_sessions ELSE 0 END as purchase_rate_30d,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     DATEDIFF('2019-12-31', last_session_time) as days_since_last_session,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     DATEDIFF('2019-12-31', last_purchase_time) as days_since_last_purchase,
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     NULL as preferred_category_id,  -- To be computed separately
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     NULL as preferred_brand,  -- To be computed separately
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10>     avg_purchase_value as avg_purchase_value_30d
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> FROM user_30d_stats;
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> 
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> -- Verify partitioned tables
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> SHOW PARTITIONS events_partitioned;
++----------------------------+--+
+|         partition          |
++----------------------------+--+
+| year=2019/month=10/day=1   |
+| year=2019/month=10/day=10  |
+| year=2019/month=10/day=11  |
+| year=2019/month=10/day=12  |
+| year=2019/month=10/day=13  |
+| year=2019/month=10/day=14  |
+| year=2019/month=10/day=15  |
+| year=2019/month=10/day=16  |
+| year=2019/month=10/day=17  |
+| year=2019/month=10/day=18  |
+| year=2019/month=10/day=19  |
+| year=2019/month=10/day=2   |
+| year=2019/month=10/day=20  |
+| year=2019/month=10/day=21  |
+| year=2019/month=10/day=22  |
+| year=2019/month=10/day=23  |
+| year=2019/month=10/day=24  |
+| year=2019/month=10/day=25  |
+| year=2019/month=10/day=26  |
+| year=2019/month=10/day=27  |
+| year=2019/month=10/day=28  |
+| year=2019/month=10/day=29  |
+| year=2019/month=10/day=3   |
+| year=2019/month=10/day=30  |
+| year=2019/month=10/day=31  |
+| year=2019/month=10/day=4   |
+| year=2019/month=10/day=5   |
+| year=2019/month=10/day=6   |
+| year=2019/month=10/day=7   |
+| year=2019/month=10/day=8   |
+| year=2019/month=10/day=9   |
+| year=2019/month=11/day=1   |
+| year=2019/month=11/day=10  |
+| year=2019/month=11/day=11  |
+| year=2019/month=11/day=12  |
+| year=2019/month=11/day=13  |
+| year=2019/month=11/day=14  |
+| year=2019/month=11/day=15  |
+| year=2019/month=11/day=16  |
+| year=2019/month=11/day=17  |
+| year=2019/month=11/day=18  |
+| year=2019/month=11/day=19  |
+| year=2019/month=11/day=2   |
+| year=2019/month=11/day=20  |
+| year=2019/month=11/day=21  |
+| year=2019/month=11/day=22  |
+| year=2019/month=11/day=23  |
+| year=2019/month=11/day=24  |
+| year=2019/month=11/day=25  |
+| year=2019/month=11/day=26  |
+| year=2019/month=11/day=27  |
+| year=2019/month=11/day=28  |
+| year=2019/month=11/day=29  |
+| year=2019/month=11/day=3   |
+| year=2019/month=11/day=30  |
+| year=2019/month=11/day=4   |
+| year=2019/month=11/day=5   |
+| year=2019/month=11/day=6   |
+| year=2019/month=11/day=7   |
+| year=2019/month=11/day=8   |
+| year=2019/month=11/day=9   |
+| year=2019/month=12/day=1   |
+| year=2019/month=12/day=10  |
+| year=2019/month=12/day=11  |
+| year=2019/month=12/day=12  |
+| year=2019/month=12/day=13  |
+| year=2019/month=12/day=14  |
+| year=2019/month=12/day=15  |
+| year=2019/month=12/day=16  |
+| year=2019/month=12/day=17  |
+| year=2019/month=12/day=18  |
+| year=2019/month=12/day=19  |
+| year=2019/month=12/day=2   |
+| year=2019/month=12/day=20  |
+| year=2019/month=12/day=21  |
+| year=2019/month=12/day=22  |
+| year=2019/month=12/day=23  |
+| year=2019/month=12/day=24  |
+| year=2019/month=12/day=25  |
+| year=2019/month=12/day=26  |
+| year=2019/month=12/day=27  |
+| year=2019/month=12/day=28  |
+| year=2019/month=12/day=29  |
+| year=2019/month=12/day=3   |
+| year=2019/month=12/day=30  |
+| year=2019/month=12/day=31  |
+| year=2019/month=12/day=4   |
+| year=2019/month=12/day=5   |
+| year=2019/month=12/day=6   |
+| year=2019/month=12/day=7   |
+| year=2019/month=12/day=8   |
+| year=2019/month=12/day=9   |
++----------------------------+--+
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> SHOW PARTITIONS session_features;
++--------------------------+--+
+|        partition         |
++--------------------------+--+
+| session_date=2019-10-01  |
+| session_date=2019-10-02  |
+| session_date=2019-10-03  |
+| session_date=2019-10-04  |
+| session_date=2019-10-05  |
+| session_date=2019-10-06  |
+| session_date=2019-10-07  |
+| session_date=2019-10-08  |
+| session_date=2019-10-09  |
+| session_date=2019-10-10  |
+| session_date=2019-10-11  |
+| session_date=2019-10-12  |
+| session_date=2019-10-13  |
+| session_date=2019-10-14  |
+| session_date=2019-10-15  |
+| session_date=2019-10-16  |
+| session_date=2019-10-17  |
+| session_date=2019-10-18  |
+| session_date=2019-10-19  |
+| session_date=2019-10-20  |
+| session_date=2019-10-21  |
+| session_date=2019-10-22  |
+| session_date=2019-10-23  |
+| session_date=2019-10-24  |
+| session_date=2019-10-25  |
+| session_date=2019-10-26  |
+| session_date=2019-10-27  |
+| session_date=2019-10-28  |
+| session_date=2019-10-29  |
+| session_date=2019-10-30  |
+| session_date=2019-10-31  |
+| session_date=2019-11-01  |
+| session_date=2019-11-02  |
+| session_date=2019-11-03  |
+| session_date=2019-11-04  |
+| session_date=2019-11-05  |
+| session_date=2019-11-06  |
+| session_date=2019-11-07  |
+| session_date=2019-11-08  |
+| session_date=2019-11-09  |
+| session_date=2019-11-10  |
+| session_date=2019-11-11  |
+| session_date=2019-11-12  |
+| session_date=2019-11-13  |
+| session_date=2019-11-14  |
+| session_date=2019-11-15  |
+| session_date=2019-11-16  |
+| session_date=2019-11-17  |
+| session_date=2019-11-18  |
+| session_date=2019-11-19  |
+| session_date=2019-11-20  |
+| session_date=2019-11-21  |
+| session_date=2019-11-22  |
+| session_date=2019-11-23  |
+| session_date=2019-11-24  |
+| session_date=2019-11-25  |
+| session_date=2019-11-26  |
+| session_date=2019-11-27  |
+| session_date=2019-11-28  |
+| session_date=2019-11-29  |
+| session_date=2019-11-30  |
+| session_date=2019-12-01  |
+| session_date=2019-12-02  |
+| session_date=2019-12-03  |
+| session_date=2019-12-04  |
+| session_date=2019-12-05  |
+| session_date=2019-12-06  |
+| session_date=2019-12-07  |
+| session_date=2019-12-08  |
+| session_date=2019-12-09  |
+| session_date=2019-12-10  |
+| session_date=2019-12-11  |
+| session_date=2019-12-12  |
+| session_date=2019-12-13  |
+| session_date=2019-12-14  |
+| session_date=2019-12-15  |
+| session_date=2019-12-16  |
+| session_date=2019-12-17  |
+| session_date=2019-12-18  |
+| session_date=2019-12-19  |
+| session_date=2019-12-20  |
+| session_date=2019-12-21  |
+| session_date=2019-12-22  |
+| session_date=2019-12-23  |
+| session_date=2019-12-24  |
+| session_date=2019-12-25  |
+| session_date=2019-12-26  |
+| session_date=2019-12-27  |
+| session_date=2019-12-28  |
+| session_date=2019-12-29  |
+| session_date=2019-12-30  |
+| session_date=2019-12-31  |
++--------------------------+--+
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> SHOW PARTITIONS user_historical_features;
++------------------------------+--+
+|          partition           |
++------------------------------+--+
+| calculation_date=2019-12-31  |
++------------------------------+--+
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> 
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> -- Check table structures
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> DESCRIBE FORMATTED events_partitioned;
++-------------------------------+-----------------------------------------------------------------------------------------------+-----------------------------+--+
+|           col_name            |                                           data_type                                           |           comment           |
++-------------------------------+-----------------------------------------------------------------------------------------------+-----------------------------+--+
+| # col_name                    | data_type                                                                                     | comment                     |
+| event_time                    | timestamp                                                                                     |                             |
+| event_type                    | string                                                                                        |                             |
+| product_id                    | bigint                                                                                        |                             |
+| category_id                   | bigint                                                                                        |                             |
+| category_code                 | string                                                                                        |                             |
+| brand                         | string                                                                                        |                             |
+| price                         | decimal(10,2)                                                                                 |                             |
+| user_id                       | bigint                                                                                        |                             |
+| user_session                  | string                                                                                        |                             |
+|                               | NULL                                                                                          | NULL                        |
+| # Partition Information       | NULL                                                                                          | NULL                        |
+| # col_name                    | data_type                                                                                     | comment                     |
+| year                          | int                                                                                           |                             |
+| month                         | int                                                                                           |                             |
+| day                           | int                                                                                           |                             |
+|                               | NULL                                                                                          | NULL                        |
+| # Detailed Table Information  | NULL                                                                                          | NULL                        |
+| Database:                     | team18_projectdb                                                                              | NULL                        |
+| OwnerType:                    | USER                                                                                          | NULL                        |
+| Owner:                        | team18                                                                                        | NULL                        |
+| CreateTime:                   | Sun Apr 12 23:48:37 MSK 2026                                                                  | NULL                        |
+| LastAccessTime:               | UNKNOWN                                                                                       | NULL                        |
+| Retention:                    | 0                                                                                             | NULL                        |
+| Location:                     | hdfs://hadoop-02.uni.innopolis.ru:8020/user/team18/project/hive/warehouse/events_partitioned  | NULL                        |
+| Table Type:                   | EXTERNAL_TABLE                                                                                | NULL                        |
+| Table Parameters:             | NULL                                                                                          | NULL                        |
+|                               | COLUMN_STATS_ACCURATE                                                                         | {\"BASIC_STATS\":\"true\"}  |
+|                               | EXTERNAL                                                                                      | TRUE                        |
+|                               | bucketing_version                                                                             | 2                           |
+|                               | numFiles                                                                                      | 92                          |
+|                               | numPartitions                                                                                 | 92                          |
+|                               | numRows                                                                                       | 177493585                   |
+|                               | parquet.compression                                                                           | SNAPPY                      |
+|                               | rawDataSize                                                                                   | 1597442265                  |
+|                               | totalSize                                                                                     | 7707546730                  |
+|                               | transient_lastDdlTime                                                                         | 1776026917                  |
+|                               | NULL                                                                                          | NULL                        |
+| # Storage Information         | NULL                                                                                          | NULL                        |
+| SerDe Library:                | org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe                                   | NULL                        |
+| InputFormat:                  | org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat                                 | NULL                        |
+| OutputFormat:                 | org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat                                | NULL                        |
+| Compressed:                   | No                                                                                            | NULL                        |
+| Num Buckets:                  | -1                                                                                            | NULL                        |
+| Bucket Columns:               | []                                                                                            | NULL                        |
+| Sort Columns:                 | []                                                                                            | NULL                        |
+| Storage Desc Params:          | NULL                                                                                          | NULL                        |
+|                               | serialization.format                                                                          | 1                           |
++-------------------------------+-----------------------------------------------------------------------------------------------+-----------------------------+--+
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> DESCRIBE FORMATTED session_features;
++----------------------------------+---------------------------------------------------------------------------------------------+-----------------------------+--+
+|             col_name             |                                          data_type                                          |           comment           |
++----------------------------------+---------------------------------------------------------------------------------------------+-----------------------------+--+
+| # col_name                       | data_type                                                                                   | comment                     |
+| user_session                     | string                                                                                      |                             |
+| user_id                          | bigint                                                                                      |                             |
+| session_start                    | timestamp                                                                                   |                             |
+| session_end                      | timestamp                                                                                   |                             |
+| event_count                      | int                                                                                         |                             |
+| views_count                      | int                                                                                         |                             |
+| carts_count                      | int                                                                                         |                             |
+| remove_count                     | int                                                                                         |                             |
+| purchase_count                   | int                                                                                         |                             |
+| distinct_products                | int                                                                                         |                             |
+| distinct_categories              | int                                                                                         |                             |
+| distinct_brands                  | int                                                                                         |                             |
+| avg_price                        | decimal(10,2)                                                                               |                             |
+| max_price                        | decimal(10,2)                                                                               |                             |
+| min_price                        | decimal(10,2)                                                                               |                             |
+| total_session_duration_seconds   | bigint                                                                                      |                             |
+| avg_time_between_events_seconds  | double                                                                                      |                             |
+| first_event_hour                 | int                                                                                         |                             |
+| first_event_day_of_week          | int                                                                                         |                             |
+| has_purchase                     | boolean                                                                                     |                             |
+|                                  | NULL                                                                                        | NULL                        |
+| # Partition Information          | NULL                                                                                        | NULL                        |
+| # col_name                       | data_type                                                                                   | comment                     |
+| session_date                     | string                                                                                      |                             |
+|                                  | NULL                                                                                        | NULL                        |
+| # Detailed Table Information     | NULL                                                                                        | NULL                        |
+| Database:                        | team18_projectdb                                                                            | NULL                        |
+| OwnerType:                       | USER                                                                                        | NULL                        |
+| Owner:                           | team18                                                                                      | NULL                        |
+| CreateTime:                      | Sun Apr 12 23:51:54 MSK 2026                                                                | NULL                        |
+| LastAccessTime:                  | UNKNOWN                                                                                     | NULL                        |
+| Retention:                       | 0                                                                                           | NULL                        |
+| Location:                        | hdfs://hadoop-02.uni.innopolis.ru:8020/user/team18/project/hive/warehouse/session_features  | NULL                        |
+| Table Type:                      | EXTERNAL_TABLE                                                                              | NULL                        |
+| Table Parameters:                | NULL                                                                                        | NULL                        |
+|                                  | COLUMN_STATS_ACCURATE                                                                       | {\"BASIC_STATS\":\"true\"}  |
+|                                  | EXTERNAL                                                                                    | TRUE                        |
+|                                  | bucketing_version                                                                           | 2                           |
+|                                  | numFiles                                                                                    | 1472                        |
+|                                  | numPartitions                                                                               | 92                          |
+|                                  | numRows                                                                                     | 38592070                    |
+|                                  | parquet.compression                                                                         | SNAPPY                      |
+|                                  | rawDataSize                                                                                 | 771841400                   |
+|                                  | totalSize                                                                                   | 2921728142                  |
+|                                  | transient_lastDdlTime                                                                       | 1776027114                  |
+|                                  | NULL                                                                                        | NULL                        |
+| # Storage Information            | NULL                                                                                        | NULL                        |
+| SerDe Library:                   | org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe                                 | NULL                        |
+| InputFormat:                     | org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat                               | NULL                        |
+| OutputFormat:                    | org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat                              | NULL                        |
+| Compressed:                      | No                                                                                          | NULL                        |
+| Num Buckets:                     | 16                                                                                          | NULL                        |
+| Bucket Columns:                  | [user_id]                                                                                   | NULL                        |
+| Sort Columns:                    | []                                                                                          | NULL                        |
+| Storage Desc Params:             | NULL                                                                                        | NULL                        |
+|                                  | serialization.format                                                                        | 1                           |
++----------------------------------+---------------------------------------------------------------------------------------------+-----------------------------+--+
+0: jdbc:hive2://hadoop-03.uni.innopolis.ru:10> DESCRIBE FORMATTED user_historical_features;
