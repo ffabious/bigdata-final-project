@@ -1,4 +1,6 @@
 # pylint: disable=import-error,no-name-in-module,too-many-locals,too-many-statements
+"""Train and evaluate team18 Spark ML models for Stage 3."""
+
 import math
 import os
 import shutil
