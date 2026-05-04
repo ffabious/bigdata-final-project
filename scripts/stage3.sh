@@ -1,5 +1,16 @@
+set -euo pipefail
+
 echo "Stage 3: Predictive Data Analysis with Spark ML"
 echo "Started at: $(date)"
+
+PYTHON_BIN="${PYSPARK_PYTHON:-python3}"
+
+if [ -d /usr/lib/spark ] && [ -z "${SPARK_HOME:-}" ]; then
+  export SPARK_HOME=/usr/lib/spark
+fi
+
+export PYSPARK_DRIVER_PYTHON="$PYTHON_BIN"
+export PYSPARK_PYTHON="$PYTHON_BIN"
 
 mkdir -p data models output
 
