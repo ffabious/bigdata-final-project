@@ -380,9 +380,8 @@ def build_preprocessing_pipeline():
                 handleInvalid="keep",
             ),
             OneHotEncoder(
-                inputCols=["last_prefix_event_type_index"],
-                outputCols=["last_prefix_event_type_encoded"],
-                handleInvalid="keep",
+                inputCol="last_prefix_event_type_index",
+                outputCol="last_prefix_event_type_encoded",
             ),
             VectorAssembler(
                 inputCols=imputed_features + ["last_prefix_event_type_encoded"],
