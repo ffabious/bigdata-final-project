@@ -23,8 +23,8 @@ from pyspark.sql import functions as func
 
 
 TEAM = 18
-DATABASE = "team18_projectdb"
 WAREHOUSE = "project/hive/warehouse"
+EVENTS_PARQUET_PATH = f"{WAREHOUSE}/events_partitioned"
 HDFS_DATA_DIR = "project/data"
 HDFS_MODEL_DIR = "project/models"
 HDFS_OUTPUT_DIR = "project/output"
@@ -121,19 +121,16 @@ def build_spark_session():
     return (
         SparkSession.builder.appName(f"team{TEAM} - stage III spark ML")
         .master("yarn")
-        .config("hive.metastore.uris", "thrift://hadoop-02.uni.innopolis.ru:9883")
         .config("spark.sql.warehouse.dir", WAREHOUSE)
         .config("spark.sql.avro.compression.codec", "snappy")
         .config("spark.sql.shuffle.partitions", "400")
-        .enableHiveSupport()
         .getOrCreate()
     )
 
 
 def read_events(spark):
-    """Read normalized events from the Hive warehouse."""
-    spark.sql(f"USE {DATABASE}")
-    events = spark.table(f"{DATABASE}.events_partitioned")
+    """Read normalized events from the Hive warehouse Parquet table path."""
+    events = spark.read.parquet(EVENTS_PARQUET_PATH)
     return events.select(
         func.col("event_time").cast("timestamp").alias("event_time"),
         func.col("event_type"),
