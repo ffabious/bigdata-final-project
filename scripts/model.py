@@ -479,10 +479,11 @@ def write_hdfs_outputs(spark, train_data, test_data, predictions, evaluation):
         1
     ).write.mode("overwrite").json(HDFS_TEST_PATH)
 
-    predictions["model1"].select("label", "prediction").coalesce(1).write.mode(
+    prediction_columns = ["user_session", "user_id", "label", "prediction"]
+    predictions["model1"].select(*prediction_columns).coalesce(1).write.mode(
         "overwrite"
     ).option("header", "true").csv(HDFS_MODEL1_PREDICTIONS_PATH)
-    predictions["model2"].select("label", "prediction").coalesce(1).write.mode(
+    predictions["model2"].select(*prediction_columns).coalesce(1).write.mode(
         "overwrite"
     ).option("header", "true").csv(HDFS_MODEL2_PREDICTIONS_PATH)
 

@@ -16,6 +16,8 @@ TBLPROPERTIES ('skip.header.line.count'='1');
 
 DROP TABLE IF EXISTS model1_predictions;
 CREATE EXTERNAL TABLE model1_predictions (
+    user_session STRING,
+    user_id BIGINT,
     label DOUBLE,
     prediction DOUBLE
 )
@@ -27,6 +29,8 @@ TBLPROPERTIES ('skip.header.line.count'='1');
 
 DROP TABLE IF EXISTS model2_predictions;
 CREATE EXTERNAL TABLE model2_predictions (
+    user_session STRING,
+    user_id BIGINT,
     label DOUBLE,
     prediction DOUBLE
 )
