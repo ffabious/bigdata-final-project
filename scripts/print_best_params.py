@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 from pyspark.ml import PipelineModel
 from pyspark.sql import SparkSession
 
@@ -17,9 +19,10 @@ for model_name, model_path in models:
     model = PipelineModel.load(model_path)
     classifier = model.stages[-1]
 
-    print(f"\n=== {model_name} ===")
+    print("")
+    print("=== {} ===".format(model_name))
     for param, value in classifier.extractParamMap().items():
         if param.parent == classifier.uid:
-            print(f"{param.name}: {value}")
+            print("{}: {}".format(param.name, value))
 
 spark.stop()
